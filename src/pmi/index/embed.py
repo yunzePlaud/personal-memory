@@ -1,8 +1,9 @@
 """Pluggable embedders. Runtime never downloads: models load from data/models only."""
 from __future__ import annotations
 
+from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Iterator, Protocol
 
 from ..config import Settings
 from ..paths import Paths
@@ -19,6 +20,21 @@ class EmbedderUnavailable(Exception):
     pass
 
 
+@contextmanager
+def _quiet_fastembed(enabled: bool) -> Iterator[None]:
+    """A missing local model is an expected state (reported via `pmi doctor`), not an error to print."""
+    if not enabled:
+        yield
+        return
+    from loguru import logger
+
+    logger.disable("fastembed")
+    try:
+        yield
+    finally:
+        logger.enable("fastembed")
+
+
 class FastEmbedder:
     """Local ONNX embeddings via fastembed (optional `semantic` extra)."""
 
@@ -28,7 +44,8 @@ class FastEmbedder:
         except ImportError as exc:
             raise EmbedderUnavailable("fastembed is not installed (uv sync --extra semantic)") from exc
         try:
-            self._model = TextEmbedding(model_name=model, cache_dir=str(cache_dir), local_files_only=local_only)
+            with _quiet_fastembed(local_only):
+                self._model = TextEmbedding(model_name=model, cache_dir=str(cache_dir), local_files_only=local_only)
         except Exception as exc:  # fastembed raises various types when files are missing
             raise EmbedderUnavailable(
                 f"model {model} is not available locally; run `pmi model download` ({type(exc).__name__})"

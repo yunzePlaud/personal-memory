@@ -131,6 +131,14 @@ def test_fastembed_unavailable_without_model(paths):
     assert embedder_status(Settings(embedding_provider="none"), paths)["reason"] == "disabled in settings"
 
 
+def test_missing_model_is_quiet(paths, capfd):
+    """Before `pmi model download`, every command must not print fastembed ERROR lines."""
+    capfd.readouterr()
+    assert get_embedder(S, paths) is None
+    captured = capfd.readouterr()
+    assert "ERROR" not in captured.err + captured.out
+
+
 def test_open_does_not_delete_index_being_created_by_another_process(paths):
     """A search.db without a meta table may be mid-creation by another process: never delete it."""
     paths.index_dir.mkdir(parents=True, exist_ok=True)
