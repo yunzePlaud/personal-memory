@@ -1,141 +1,141 @@
 # PMI · Personal Memory Infrastructure
 
-**My Memory, Any Agent.** PMI 是跑在你自己电脑上的长期记忆库。把 PRD、会议纪要、Notion 页面、Linear ticket、GitHub PR、Slack 讨论交给它，它会保存原文，并提炼成带出处的知识。Claude Code、Codex、Cursor 等任何 AI Agent 都能通过 MCP（或命令行）读写同一套记忆。
+**My Memory, Any Agent.** PMI is a long-term memory store that runs on your own machine. Give it PRDs, meeting notes, Notion pages, Linear tickets, GitHub PRs and Slack discussions: it keeps the original text and distills it into knowledge that always cites its source. Claude Code, Codex, Cursor and any other AI agent read and write the same memory through MCP (or the command line).
 
-> *English:* PMI is a local-first, portable long-term memory for AI agents. Raw sources and memories live in one SQLite file plus a folder, and agents connect over MCP (stdio) or a CLI. Every memory cites the exact source text. Newer decisions supersede older ones, and conflicts with confirmed facts go to human review. The docs below are in Chinese; the commands are self-explanatory.
+- **Sourced**: every memory carries a verbatim quote from the original text. Quotes are checked on write; a quote that does not match is rejected.
+- **Evolving**: a newer decision automatically supersedes an older one, and the old one becomes history with a validity period. When new content conflicts with a conclusion you confirmed, PMI does not overwrite it silently; the change goes to review.
+- **Clear status**: search results say which category each item is in: current, superseded, disputed, open question, or insufficient evidence.
+- **No services**: no database server, no Docker, no background process. One SQLite file plus a folder of originals is all the data; copy the folder to move it.
+- **Model-agnostic**: PMI never calls an LLM itself. The agent you are already using does the reading and understanding. An optional local multilingual embedding model is used only for semantic search.
 
-- **有出处**：每条记忆都附原文引用。写入时逐字核对，对不上就拒绝。
-- **会演化**：新决定自动替代旧决定，旧的成为带有效期的历史。如果新内容和你确认过的结论冲突，PMI 不会静默覆盖，而是送去审批。
-- **分得清**：检索结果会标出每条内容属于哪一类：当前有效、已被替代、有争议、未决讨论、证据不足。
-- **零服务**：没有数据库服务器、没有 Docker、没有常驻进程。一个 SQLite 文件加一个原文目录就是全部数据，复制文件夹就能搬家。
-- **不绑模型**：PMI 自己不调用任何 LLM，理解文本由你正在用的 Agent 完成。可选的本地多语言 embedding 模型只用于语义检索。
-
----
-
-## 目录
-
-1. [5 分钟上手](#1-5-分钟上手)
-2. [安装详解](#2-安装详解)
-3. [接入 AI Agent](#3-接入-ai-agent)
-4. [增加知识](#4-增加知识)
-5. [更新知识](#5-更新知识)
-6. [删除知识](#6-删除知识)
-7. [查询知识](#7-查询知识)
-8. [写入策略与可信度](#8-写入策略与可信度)
-9. [数据、备份与迁移](#9-数据备份与迁移)
-10. [命令速查](#10-命令速查)
-11. [安全边界](#11-安全边界)
-12. [故障排查](#12-故障排查)
-13. [开发与项目结构](#13-开发与项目结构)
+PMI handles Chinese and English text. The bundled sample data and the three Claude Code skills are written in Chinese.
 
 ---
 
-## 1. 5 分钟上手
+## Contents
 
-需要：macOS 或 Linux、`git`、[uv](https://docs.astral.sh/uv/)。Python 3.12 由 uv 自动准备。
+1. [Quick start (5 minutes)](#1-quick-start-5-minutes)
+2. [Installation](#2-installation)
+3. [Connecting AI agents](#3-connecting-ai-agents)
+4. [Adding knowledge](#4-adding-knowledge)
+5. [Updating knowledge](#5-updating-knowledge)
+6. [Deleting knowledge](#6-deleting-knowledge)
+7. [Querying knowledge](#7-querying-knowledge)
+8. [Write policy and trust](#8-write-policy-and-trust)
+9. [Data, backup and migration](#9-data-backup-and-migration)
+10. [Command reference](#10-command-reference)
+11. [Security boundary](#11-security-boundary)
+12. [Troubleshooting](#12-troubleshooting)
+13. [Development and project layout](#13-development-and-project-layout)
+
+---
+
+## 1. Quick start (5 minutes)
+
+Requirements: macOS or Linux, `git`, and [uv](https://docs.astral.sh/uv/). uv provides Python 3.12 automatically.
 
 ```bash
-# 0. 没有 uv 的话先装
+# 0. Install uv if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 1. 克隆并安装：装依赖、建数据目录、把 pmi 链接到 ~/.local/bin、装 Claude Code skills
+# 1. Clone and install: dependencies, data folder, `pmi` linked into ~/.local/bin, Claude Code skills
 git clone https://github.com/yunzePlaud/personal-memory.git ~/personal-memory
 cd ~/personal-memory
-./scripts/install.sh            # 加 --with-model 会顺便下载语义检索模型（约 220MB）
+./scripts/install.sh            # add --with-model to also download the semantic search model (~220 MB)
 
-# 2. 导入示例数据并提问
+# 2. Import the sample data and ask questions (the samples are in Chinese)
 pmi import examples/project-a --extract
-pmi context "为什么 Project A 不采用方案 B"
-pmi context "Project A 现在什么时候上线"
-pmi context "Project A 什么时候上线" --as-of 2026-10-15     # 回到过去某天的视角
+pmi context "为什么 Project A 不采用方案 B"                    # Why didn't Project A choose option B?
+pmi context "Project A 现在什么时候上线"                       # When does Project A launch now?
+pmi context "Project A 什么时候上线" --as-of 2026-10-15        # The same question, as of an earlier day
 
-# 3. 接入 Claude Code（所有项目可用）
+# 3. Connect Claude Code (available in all projects)
 claude mcp add --scope user pmi -- ~/personal-memory/pmi mcp
 ```
 
-重启 Claude Code，然后直接问：「Project A 为什么不用方案 B？」Agent 会先调用 `memory_get_context`，再带着出处回答。
+Restart Claude Code and ask: "Why didn't Project A choose option B?" The agent calls `memory_get_context` first and answers with sources.
 
-> `examples/` 里的数据是虚构的。想清空重来：删掉 `data/` 目录，再运行 `pmi init`。
+> The data in `examples/` is fictional. To start over, delete the `data/` folder and run `pmi init`.
 
 ---
 
-## 2. 安装详解
+## 2. Installation
 
-### `scripts/install.sh` 做了什么
+### What `scripts/install.sh` does
 
-| 步骤 | 内容 |
+| Step | What happens |
 |---|---|
-| 1 | `uv sync --frozen --extra semantic`：按 `uv.lock` 安装依赖，包括本地语义检索用的 fastembed |
-| 2 | `pmi init`：在仓库下创建 `data/` 目录，存放你的记忆数据（已在 `.gitignore` 里） |
-| 3 | 把 `pmi` 链接到 `~/.local/bin/pmi`。这个目录不在 PATH 里时，脚本会提示你加上 |
-| 4 | 把 `integrations/claude-code/skills/` 下的 3 个 skill 链接到 `~/.claude/skills/` |
-| 可选 | `--with-model`：下载本地多语言 embedding 模型 `paraphrase-multilingual-MiniLM-L12-v2`（约 220MB） |
+| 1 | `uv sync --frozen --extra semantic`: installs the dependencies pinned in `uv.lock`, including fastembed for local semantic search |
+| 2 | `pmi init`: creates the `data/` folder for your memory data (already in `.gitignore`) |
+| 3 | Links `pmi` into `~/.local/bin/pmi`. If that folder is not on your PATH, the script tells you how to add it |
+| 4 | Links the 3 skills under `integrations/claude-code/skills/` into `~/.claude/skills/` |
+| Optional | `--with-model`: downloads the local multilingual embedding model `paraphrase-multilingual-MiniLM-L12-v2` (~220 MB) |
 
-可用选项：
+Options:
 
-- `--no-skills`：不装 skill。
-- `--no-semantic`：只用关键词检索，依赖更少。之后请在 shell 配置里加上 `export PMI_NO_SEMANTIC=1`，接入 Claude Code 时加 `-e PMI_NO_SEMANTIC=1`；否则第一次运行 `pmi` 时会自动补装语义检索依赖。
-- `--with-model`：同时下载语义检索模型。
-- `PMI_BIN_DIR` / `PMI_SKILLS_DIR`：环境变量，用来改链接的目标目录。
+- `--no-skills`: do not install the skills.
+- `--no-semantic`: keyword search only, fewer dependencies. Afterwards add `export PMI_NO_SEMANTIC=1` to your shell profile, and pass `-e PMI_NO_SEMANTIC=1` to `claude mcp add`; otherwise the first `pmi` run installs the semantic search dependencies anyway.
+- `--with-model`: also download the semantic search model.
+- `PMI_BIN_DIR` / `PMI_SKILLS_DIR`: environment variables that change where the links go.
 
-脚本可以重复运行。如果目标位置已经有同名的真实文件或文件夹，脚本不会覆盖它。
+The script is safe to run again. If a real file or folder already exists where a link would go, the script leaves it untouched.
 
-### 手动安装
+### Manual installation
 
 ```bash
 uv sync --frozen --extra semantic
 ./pmi init
-./pmi doctor          # 检查 Python、SQLite、FTS5、模型、目录权限
-./pmi model download  # 可选：下载语义检索模型
+./pmi doctor          # checks Python, SQLite, FTS5, the model and folder permissions
+./pmi model download  # optional: semantic search model
 ```
 
-`./pmi` 是启动脚本：它把 `PMI_HOME` 设为仓库目录，再用 uv 运行。通过符号链接调用（如 `~/.local/bin/pmi`）时，它同样能找到仓库。所有命令都支持 `--json`。
+`./pmi` is a launcher script: it sets `PMI_HOME` to the repository folder and runs PMI with uv. It also finds the repository when called through a symlink such as `~/.local/bin/pmi`. Every command accepts `--json`.
 
-### 外部工具（按需）
+### External tools (only when needed)
 
-| 用途 | 需要 |
+| Purpose | Requirement |
 |---|---|
-| 导入 Notion / Linear / Slack | 在 Claude Code 里连接对应的 connector（claude.ai → Settings → Connectors） |
-| 导入 GitHub PR（`/pmi-linear`、`pmi github-pr`） | 安装 [GitHub CLI](https://cli.github.com/)，并运行 `gh auth login` |
+| Importing from Notion / Linear / Slack | Connect the matching connector in Claude (claude.ai → Settings → Connectors) |
+| Importing GitHub PRs (`/pmi-linear`, `pmi github-pr`) | Install the [GitHub CLI](https://cli.github.com/) and run `gh auth login` |
 
-### 配置（可选）
+### Configuration (optional)
 
-把 `config/settings.example.toml` 复制为 `config/settings.toml`。常用项：
+Copy `config/settings.example.toml` to `config/settings.toml`. Common settings:
 
 ```toml
 [embedding]
-provider = "none"                 # 关闭语义检索；默认是 "fastembed"
+provider = "none"                 # turn off semantic search; the default is "fastembed"
 [capture]
-import_roots = ["~/Documents", "~/Desktop", "~/Downloads"]   # Agent 能让 PMI 读取的目录；隐藏目录一律拒绝
+import_roots = ["~/Documents", "~/Desktop", "~/Downloads"]   # folders an agent may ask PMI to read; hidden folders are always refused
 [policy]
-inferred_create = "review"        # Agent 提交的、没有原文引用的推断：review / apply / deny
+inferred_create = "review"        # agent-proposed claims without a source quote: review / apply / deny
 ```
 
-**不要在配置文件里放任何密钥**，因为这个文件夹是可以整体复制走的。
+**Never put secrets in the configuration file**: the whole folder is meant to be copied around.
 
 ---
 
-## 3. 接入 AI Agent
+## 3. Connecting AI agents
 
-所有 Agent 都用同一条命令启动 PMI 的 MCP 服务器（stdio）：
+Every agent starts the PMI MCP server (stdio) with the same command:
 
 ```
-命令：/绝对路径/personal-memory/pmi
-参数：["mcp"]
+command: /absolute/path/to/personal-memory/pmi
+args:    ["mcp"]
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add --scope user pmi -- ~/personal-memory/pmi mcp    # --scope user：所有项目可用
-claude mcp list                                                 # 确认已连接
+claude mcp add --scope user pmi -- ~/personal-memory/pmi mcp    # --scope user: available in all projects
+claude mcp list                                                 # check that it is connected
 ```
 
-`install.sh` 已经装好 3 个 skill：`/pmi-notion`、`/pmi-linear`、`/pmi-slack`，用法见[第 4 节](#4-增加知识)。
+`install.sh` has already installed the 3 skills: `/pmi-notion`, `/pmi-linear` and `/pmi-slack` (see [section 4](#4-adding-knowledge)).
 
 ### Codex CLI
 
-在 `~/.codex/config.toml` 里加上：
+Add this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.pmi]
@@ -143,14 +143,14 @@ command = "/Users/<you>/personal-memory/pmi"
 args = ["mcp"]
 ```
 
-### Cursor / Claude Desktop / Gemini CLI / 其他 MCP 客户端
+### Cursor / Claude Desktop / Gemini CLI / other MCP clients
 
-这些客户端用同一种 JSON 结构，只是配置文件的位置不同：
+These clients share the same JSON structure; only the file location differs:
 
-| 客户端 | 配置文件 |
+| Client | Configuration file |
 |---|---|
-| Cursor | `~/.cursor/mcp.json`（全局），或项目内的 `.cursor/mcp.json` |
-| Claude Desktop | macOS：`~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Cursor | `~/.cursor/mcp.json` (global), or `.cursor/mcp.json` inside a project |
+| Claude Desktop | macOS: `~/Library/Application Support/Claude/claude_desktop_config.json` |
 | Gemini CLI | `~/.gemini/settings.json` |
 
 ```json
@@ -161,368 +161,368 @@ args = ["mcp"]
 }
 ```
 
-### MCP 提供的 6 个工具
+### The 6 MCP tools
 
-服务器的 `instructions` 字段写明了用法，新的 Agent 连上就能直接用：
+The server's `instructions` field explains how to use them, so a newly connected agent can start right away:
 
-| 工具 | 作用 |
+| Tool | Purpose |
 |---|---|
-| `memory_get_context` | **首选**。给一个问题，返回当前有效的记忆（带引用）、历史、冲突和相关原文片段；证据不足时会明说 |
-| `memory_search` | 低层检索，范围是记忆或原文片段 |
-| `memory_get` | 按 id 读取：记忆（含版本历史）、原文（分页）、实体、待审批变更 |
-| `memory_add_source` | 存原文（文本或文件）。传 `url` 会生成稳定的来源身份，便于版本化。默认 `trust="external"` |
-| `memory_propose` | **唯一的写入口**：create / supersede / update / link / archive / restore |
-| `memory_list` | 浏览记忆、实体、slot、待审批变更、最近操作。传 `source=<来源id>` 可以列出引用某来源的记忆 |
+| `memory_get_context` | **Start here.** Given a question, returns the current memories (with quotes), history, conflicts and relevant source passages; says so when the evidence is insufficient |
+| `memory_search` | Low-level search over memories or source passages |
+| `memory_get` | Read by id: memories (with version history), sources (paged), entities, pending changes |
+| `memory_add_source` | Store an original text or file. Passing `url` gives the source a stable identity so later imports become new versions. Defaults to `trust="external"` |
+| `memory_propose` | **The only write path**: create / supersede / update / link / archive / restore |
+| `memory_list` | Browse memories, entities, slots, pending changes and recent activity. `source=<source id>` lists the memories that cite a source |
 
-确认、删除、审批**不在 MCP 上**，只能由你本人在命令行里执行。
+Confirming, deleting and approving are **not available over MCP**. Only you can do them, from the command line.
 
-### 让 Agent 主动使用 PMI
+### Make agents use PMI proactively
 
-在项目的 `CLAUDE.md` / `AGENTS.md` 里加一段，Agent 会更稳定地先查 PMI：
+Add a paragraph like this to a project's `CLAUDE.md` / `AGENTS.md` so agents check PMI first more reliably:
 
 ```markdown
-回答与我过去工作相关的问题（需求背景、决策原因、谁负责、某功能现在的状态）之前，先调用 PMI 的 `memory_get_context`，回答时附上它返回的出处；PMI 说证据不足时直接说明，不要编造。
+Before answering questions about my past work (requirement background, why a decision was made, who owns what, the current state of a feature), call PMI's `memory_get_context` and cite the sources it returns. If PMI reports insufficient evidence, say so instead of guessing.
 ```
 
-### 不支持 MCP 的 Agent 和脚本
+### Agents and scripts without MCP
 
-能执行命令的 Agent 都可以用命令行：
+Any agent that can run commands can use the CLI:
 
 ```bash
-pmi --json context "某个问题"
+pmi --json context "some question"
 ```
 
-在 Python 里直接调用：
+From Python:
 
 ```python
 from pmi import Memory
 with Memory.open("~/personal-memory") as m:
-    ctx = m.get_context("为什么 Project A 不采用方案 B")
+    ctx = m.get_context("Why didn't Project A choose option B?")
 ```
 
 ---
 
-## 4. 增加知识
+## 4. Adding knowledge
 
-PMI 里的数据分两层：
+PMI stores data in two layers:
 
-- **原文**（sources）：证据本身。
-- **记忆**（memories）：从原文提炼出的知识，每条都引用原文。
+- **Sources**: the original texts, which serve as evidence.
+- **Memories**: knowledge distilled from sources; every memory quotes a source.
 
-### 4.1 导入文件和目录
+### 4.1 Import files and folders
 
 ```bash
-pmi import ~/Documents/prds                 # 批量导入目录：Markdown / TXT / PDF / DOCX，GBK 编码的中文文本也能读
-pmi import meeting.md --extract             # 按约定格式写的会议纪要会自动提炼成记忆（格式见下）
-pmi import notes/ --trust external          # 别人写的资料可以标为外部来源
+pmi import ~/Documents/prds                 # import a folder: Markdown / TXT / PDF / DOCX; GBK-encoded Chinese text works too
+pmi import meeting.md --extract             # meeting notes in the convention below become memories automatically
+pmi import notes/ --trust external          # mark material written by others as external
 ```
 
-导入时：
+On import:
 
-- 隐藏文件和不支持的格式会被跳过，并列出原因。单个坏文件不影响其余文件。
-- 内容相同的文件会自动去重。
-- **同一个文件改过之后再导入，会存成新版本**，旧版本保留。
+- Hidden files and unsupported formats are skipped, with the reason listed. One broken file does not stop the rest.
+- Identical content is deduplicated automatically.
+- **Importing a file again after it changed stores a new version**; the old version is kept.
 
-**会议纪要约定格式**（用 `--extract` 提炼，不需要任何 LLM）：
+**Meeting notes convention** (extracted with `--extract`, no LLM needed):
 
 ```markdown
 ---
-title: Project A 周会
+title: Project A weekly sync
 date: 2026-10-01
 project: Project A
 attendees: [Alice, Bob]
 type: meeting
 ---
-# Project A 周会 2026-10-01
+# Project A weekly sync 2026-10-01
 
-## 决策
-- [slot: launch-date] Project A 计划于 11 月 15 日上线。
+## Decisions
+- [slot: launch-date] Project A will launch on November 15.
 
-## 事实
-- 推送平台由 Bob 的团队维护。
+## Facts
+- The push platform is maintained by Bob's team.
 
-## 待办
-- @Bob 在 10 月 10 日前完成接入评估。
+## Action Items
+- @Bob finish the integration review by October 10.
 ```
 
-格式说明：
+Notes on the format:
 
-- 小节名可以用 `决策/决定/Decisions`、`事实/背景/结论/Facts/Context`、`待办/行动项/Action Items/TODO`。
-- `[slot: …]` 是主题键，见[第 5 节](#5-更新知识)。
-- `@名字` 后面要加一个空格。
-- 自由格式的文档（比如 PRD）用这种方式提取不出内容，请交给 Agent 提炼（见 4.3）。
+- Section names can be `Decisions`, `Facts` / `Context`, `Action Items` / `TODO`, or their Chinese equivalents (`决策`, `事实` / `背景` / `结论`, `待办` / `行动项`).
+- `[slot: …]` is a topic key; see [section 5](#5-updating-knowledge).
+- Put a space after `@name`.
+- Free-form documents such as PRDs yield nothing this way. Let an agent distill them instead (see 4.3).
 
-### 4.2 写一段文本
+### 4.2 Store a piece of text
 
 ```bash
-pmi note "Project A 的发布窗口改到每周四"
-pbpaste | pmi note - --kind document --title "某 PRD" --url "<原始链接>" --trust external
+pmi note "Project A's release window moves to Thursdays"
+pbpaste | pmi note - --kind document --title "Some PRD" --url "<original link>" --trust external
 ```
 
-### 4.3 让 Agent 提炼（推荐）
+### 4.3 Let an agent distill it (recommended)
 
-在 Claude Code 里说：「把这份 PRD 存进 PMI 并提炼知识」。Agent 会这样做：
+In Claude Code, say: "Store this PRD in PMI and distill the knowledge." The agent will:
 
-1. 调用 `memory_add_source` 存原文。
-2. 调用 `memory_propose` 提交记忆，每条都附上逐字引用的 `quote`。
+1. Call `memory_add_source` to store the original text.
+2. Call `memory_propose` to submit memories, each with a verbatim `quote`.
 
-PMI 会核对每条引用，并自动处理去重、替代和冲突。
+PMI checks every quote and handles deduplication, superseding and conflicts automatically.
 
-### 4.4 从 Notion / Linear / Slack 导入（Claude Code skills）
+### 4.4 Import from Notion / Linear / Slack (Claude Code skills)
 
-| 你说 | 会发生什么 |
+| You say | What happens |
 |---|---|
-| `/pmi-notion <Notion 页面链接>` | 抓取整页，**先给你看标题、位置、字数，你确认后**才存原文，然后自动提炼决策、规则、流程、负责人 |
-| `/pmi-linear <ticket 链接或编号>` | 抓取 ticket（描述、评论、状态流转）和它关联的 GitHub PR（描述、人工 review 讨论、改动文件列表，**不含 diff**，由你本机的 `gh` 原样生成）。你确认后存入，再提炼根因、方案、取舍、回归要点 |
-| `/pmi-slack <thread 链接>` | 读取整个 thread。确认时会**标出私有频道 / 私信**。存入后按讨论的最终结论提炼，并区分已拍板的决策、**未决讨论**、行动项 |
+| `/pmi-notion <Notion page link>` | Fetches the whole page and **shows you the title, location and length; only after you confirm** does it store the text, then it distills decisions, rules, procedures and owners |
+| `/pmi-linear <ticket link or ID>` | Fetches the ticket (description, comments, status history) and its linked GitHub PRs (description, human review discussion, list of changed files; **no diff**; generated verbatim by your local `gh`). After you confirm, it stores them and distills root causes, fixes, trade-offs and regression notes |
+| `/pmi-slack <thread link>` | Reads the whole thread. The confirmation **flags private channels and DMs**. After storing, it distills the discussion by its final outcome, separating settled decisions, **open questions** and action items |
 
-也可以直接说「把这个 ticket 导入 PMI」。三个 skill 遵循同样的规则：
+You can also just say "import this ticket into PMI". All three skills follow the same rules:
 
-- **只有你明确要求导入时才执行。** 如果链接夹在别的任务里（「照这个 PRD 实现」「帮我回复这个 thread」），不会被存进 PMI。
-- **写入前一定先问你。** 一次确认同时覆盖「存原文」和「自动提炼」。说「只存原文」可以跳过提炼。
-- **一律按外部文档保存。** 由它们支撑的记忆，不能自动改掉你确认过的记忆，也不能改掉由你自己文档支撑的记忆。
-- **同一对象只有一个身份。** 同一页面、ticket、PR 或 thread 的各种链接写法都对应同一个来源身份，例如 `notion:<页面ID>`、`linear:APP-184`、`github:owner/repo#123`、`slack:<频道>/<thread 时间戳>`。再次导入会生成新版本。
-- **不保存个人标识。** 不存邮箱和用户 ID；图片只保留说明文字或文件名。
+- **They run only when you explicitly ask for an import.** A link that is part of another task ("implement this PRD", "help me reply to this thread") is not stored in PMI.
+- **They always ask before writing.** One confirmation covers both storing the text and distilling it. Say "store the text only" to skip distilling.
+- **Everything is stored as an external document.** Memories backed by these sources cannot automatically change memories you confirmed, or memories backed by your own documents.
+- **One object, one identity.** All link forms of the same page, ticket, PR or thread map to one source identity, such as `notion:<page id>`, `linear:APP-184`, `github:owner/repo#123` or `slack:<channel>/<thread timestamp>`. Importing it again creates a new version.
+- **No personal identifiers are kept.** Email addresses and user IDs are not stored; images keep only their caption or file name.
 
-其他 Agent 可以参考 `integrations/claude-code/skills/*/SKILL.md` 里的流程，用它们自己的 Notion / Linear / Slack 连接器做同样的事。
+Other agents can follow the steps in `integrations/claude-code/skills/*/SKILL.md` with their own Notion / Linear / Slack connectors.
 
-### 4.5 直接写记忆（JSON）
+### 4.5 Write memories directly (JSON)
 
 ```bash
-pmi propose ops.json                      # 以你本人身份执行，直接生效
-pmi propose ops.json --as-agent my-bot    # 以 Agent 身份执行，受写入策略约束，冲突会进审批
+pmi propose ops.json                      # runs as you; takes effect immediately
+pmi propose ops.json --as-agent my-bot    # runs as an agent: write policy applies and conflicts go to review
 ```
 
-`ops.json` 示例（完整示例见 `examples/agent-ops.json`）：
+Example `ops.json` (full example in `examples/agent-ops.json`):
 
 ```json
 [
   {"op": "create", "memory": {
     "kind": "decision",
-    "content": "Project A 的推送通知采用方案 A（接入现有推送平台）",
+    "content": "Project A sends push notifications through option A (the existing push platform)",
     "slot": "project-a/architecture",
     "entities": [{"name": "Project A", "kind": "project"}],
     "valid_from": "2026-10-01",
-    "evidence": [{"source_id": "src_…", "quote": "采用方案 A（接入现有推送平台）"}]
+    "evidence": [{"source_id": "src_…", "quote": "option A (the existing push platform)"}]
   }}
 ]
 ```
 
-字段说明：
+Fields:
 
-- `kind` 可选值：`episodic`（事件）、`semantic`（事实）、`project`、`person`、`decision`、`procedure`（流程）、`preference`。
-- `evidence.quote` 必须逐字出自 `source_id` 对应的原文，且至少 4 个字。
+- `kind` is one of `episodic` (event), `semantic` (fact), `project`, `person`, `decision`, `procedure`, `preference`.
+- `evidence.quote` must appear verbatim in the source named by `source_id` and be at least 4 characters long.
 
 ---
 
-## 5. 更新知识
+## 5. Updating knowledge
 
-### slot：同一主题只有一个当前结论
+### Slots: one current conclusion per topic
 
-`slot` 是记忆的主题键，例如 `project-a/launch-date`。同一个 slot 在同一时刻只有一条有效记忆。新主张进来时：
+A `slot` is a memory's topic key, such as `project-a/launch-date`. A slot has at most one active memory at any time. When a new claim arrives:
 
-| 新进来的主张 | 结果 |
+| New claim | Result |
 |---|---|
-| 日期比现有结论晚 | **自动替代**旧结论。旧结论变成 superseded，记下有效期和替代者 |
-| 日期比现有结论早（补录历史） | 直接插进历史，当前结论不变。所以**乱序导入不影响结果** |
-| 和你确认过的结论冲突，或证据的可信度更低 | 新主张标为 `disputed` 并生成待审批变更，原结论不动 |
-| 没有日期、分不清先后 | 进待审批 |
-| 内容和现有记忆相同 | 合并为一条，只追加引用 |
+| Dated later than the current conclusion | **Automatically supersedes** it. The old conclusion becomes superseded, with its validity period and successor recorded |
+| Dated earlier (backfilled history) | Inserted into the history; the current conclusion stays. **Import order does not change the outcome** |
+| Conflicts with a conclusion you confirmed, or its evidence is less trusted | The new claim is marked `disputed` and a pending change is created; the current conclusion stays |
+| Undated, so the order is unclear | Goes to review |
+| Same content as an existing memory | Merged into it; only the quote is added |
 
-### 常用更新操作
+### Common update operations
 
 ```bash
-pmi import 改过的文件.md              # 存成原文新版本；旧版本里被引用、但新版里消失的句子会提示出来
-pmi confirm mem_…                     # 确认一条记忆，之后 Agent 不能自动改它
-pmi review list                       # 查看待审批变更，会显示将被替代或激活的记忆全文和引用
-pmi review approve prp_…              # 批准；被批准的记忆标为已确认
-pmi review reject prp_… --reason "Slack 消息不准确"
-pmi show mem_… --history              # 查看一条记忆的完整版本历史和引用
-pmi entity alias ent_… "别名"          # 让不同叫法指向同一个人或项目
+pmi import changed-file.md            # stored as a new version; quoted sentences that disappeared from it are reported
+pmi confirm mem_…                     # confirm a memory; agents can no longer change it automatically
+pmi review list                       # list pending changes, with the full text and quotes of what would be superseded or activated
+pmi review approve prp_…              # approve; the approved memory is marked as confirmed
+pmi review reject prp_… --reason "The Slack message was wrong"
+pmi show mem_… --history              # full version history and quotes of a memory
+pmi entity alias ent_… "alias"        # make different names point to the same person or project
 ```
 
-也可以用 JSON 修改，传给 `pmi propose` 或 MCP 的 `memory_propose`：
+You can also change memories with JSON, through `pmi propose` or MCP `memory_propose`:
 
-- 修改内容：`{"op":"update","id":"mem_…","changes":{"content":"…"}}`
-- 替代旧记忆：`{"op":"supersede","old_ids":["mem_…"],"memory":{…}}`
-- 关联两条记忆：`{"op":"link","from_id":"…","to_id":"…","type":"contradicts"}`
+- Change the content: `{"op":"update","id":"mem_…","changes":{"content":"…"}}`
+- Supersede old memories: `{"op":"supersede","old_ids":["mem_…"],"memory":{…}}`
+- Link two memories: `{"op":"link","from_id":"…","to_id":"…","type":"contradicts"}`
 
 ---
 
-## 6. 删除知识
+## 6. Deleting knowledge
 
 ```bash
-pmi archive mem_… --reason "不再相关"            # 软删除：检索默认不返回，可以恢复
-pmi restore-memory mem_…                         # 恢复归档的记忆
+pmi archive mem_… --reason "no longer relevant"     # soft delete: hidden from search by default, can be restored
+pmi restore-memory mem_…                            # restore an archived memory
 
-pmi forget mem_… --reason "不需要了"             # 硬删除一条记忆
-pmi forget src_… --reason "敏感"                 # 硬删除原文；有记忆依赖它时会拒绝，并列出受影响的记忆
-pmi forget src_… --reason "敏感" --cascade        # 连同只依赖这份原文的记忆一起删除
-pmi forget src_… --reason "敏感" --keep-memories  # 保留记忆，但降级为「推断」
-pmi forget src_… --reason "…" --this-version      # 只删这一个版本（默认删除该文档的所有版本）
+pmi forget mem_… --reason "not needed"              # hard-delete a memory
+pmi forget src_… --reason "sensitive"               # hard-delete a source; refused if memories depend on it, listing them
+pmi forget src_… --reason "sensitive" --cascade     # also delete the memories that rest only on this source
+pmi forget src_… --reason "sensitive" --keep-memories   # keep those memories, downgraded to "inferred"
+pmi forget src_… --reason "…" --this-version        # delete only this version (default: every version of the document)
 ```
 
-关于遗忘：
+About forgetting:
 
-- 遗忘不可恢复，只留下不含内容的墓碑（id、时间、原因）。
-- 数据库开启了 `secure_delete`，遗忘后还会压缩索引、截断 WAL，被删内容不会残留在数据库文件里。
-- **遗忘之前生成的备份里仍然有这份内容**，需要的话请自己删除旧备份。
+- Forgetting cannot be undone. Only a tombstone without content remains (id, time, reason).
+- The database runs with `secure_delete`, and forgetting also compacts the search index and truncates the WAL, so the deleted content does not linger in the database files.
+- **Backups made before forgetting still contain the content.** Delete old backups yourself if needed.
 
 ---
 
-## 7. 查询知识
+## 7. Querying knowledge
 
 ```bash
-pmi context "Project A 现在什么时候上线"                 # 组装好的上下文：当前结论、冲突、历史、原文片段
-pmi context "上线时间" --project "Project A" --history
-pmi context "上线时间" --as-of 2026-10-15                 # 按某个时间点的视角回答
-pmi search "推送平台" --scope sources                      # 低层检索
-pmi show mem_… src_…                                       # 按 id 查看
-pmi list slots | entities | proposals | recent | memories  # 浏览
+pmi context "When does Project A launch now?"                # assembled context: current, conflicts, history, source passages
+pmi context "launch date" --project "Project A" --history
+pmi context "launch date" --as-of 2026-10-15                 # answer as of a point in time
+pmi search "push platform" --scope sources                   # low-level search
+pmi show mem_… src_…                                         # look up by id
+pmi list slots | entities | proposals | recent | memories    # browse
 ```
 
-`context` 返回结果中的字段：
+Fields in a `context` result:
 
-- `status`：active / superseded / disputed。
-- `verification`：user_confirmed / source_backed / inferred。
-- `trust`：每条引用的可信度。
-- `insufficient_evidence: true`：PMI 没有足够证据回答这个问题。只靠实体关联或弱语义相似召回的内容仍会列出，但不算作证据。
+- `status`: active / superseded / disputed.
+- `verification`: user_confirmed / source_backed / inferred.
+- `trust`: the trust level of each quote.
+- `insufficient_evidence: true`: PMI does not have enough evidence to answer. Items found only through entity links or weak semantic similarity are still listed, but do not count as evidence.
 
 ---
 
-## 8. 写入策略与可信度
+## 8. Write policy and trust
 
-| 谁 | 能做什么 |
+| Who | What they can do |
 |---|---|
-| Agent（通过 MCP，或 CLI 加 `--as-agent`） | 有原文引用的新记忆直接生效（标为未确认）。以下操作会进待审批：没有引用的推断、改动受保护的记忆、恢复你归档的记忆。不能确认、删除或审批 |
-| 你（CLI） | 一切操作 |
+| Agents (over MCP, or the CLI with `--as-agent`) | New memories with a source quote take effect immediately (marked unconfirmed). These go to review: claims without a quote, changes to protected memories, restoring a memory you archived. Agents cannot confirm, delete or approve |
+| You (CLI) | Everything |
 
-**受保护的记忆**是指你确认过的记忆，或由更可信来源支撑的记忆。
+**Protected memories** are memories you confirmed, or memories backed by a more trusted source.
 
-可信度从高到低：
+Trust levels, from highest to lowest:
 
-- `owner`：你自己导入的内容。
-- `agent`：Agent 的分析。
-- `external`：Slack、网页、别人的文档，以及 Notion / Linear 导入。
+- `owner`: content you imported yourself.
+- `agent`: an agent's own analysis.
+- `external`: Slack, web pages, other people's documents, and Notion / Linear imports.
 
-一次改动能否自动生效，看的是它**新带来的证据中最低的**可信度。附带一句目标原文里本来就有的话，不能抬高可信度。
+Whether a change takes effect automatically depends on the **lowest** trust level among the new evidence it brings. Adding a sentence that already exists in the target's own source does not raise the trust level.
 
 ---
 
-## 9. 数据、备份与迁移
+## 9. Data, backup and migration
 
 ```
 personal-memory/
-├── pmi                         启动脚本
-├── scripts/install.sh          一键安装
-├── integrations/claude-code/   Claude Code skills（pmi-notion / pmi-linear / pmi-slack）
+├── pmi                         launcher script
+├── scripts/install.sh          one-step installer
+├── integrations/claude-code/   Claude Code skills (pmi-notion / pmi-linear / pmi-slack)
 ├── src/  tests/  docs/  examples/
-├── config/settings.toml        可选配置（不进 git）
-└── data/                       你的记忆（不进 git）
-    ├── memory/pmi.db           ← 必需：真相源
-    ├── sources/                ← 必需：原始文件
-    ├── memory/backups/         备份
-    ├── index/search.db         可删：检索索引，会自动重建
-    └── models/                 可删：embedding 模型，可以重新下载
+├── config/settings.toml        optional configuration (not committed)
+└── data/                       your memory (not committed)
+    ├── memory/pmi.db           ← required: the source of truth
+    ├── sources/                ← required: original files
+    ├── memory/backups/         backups
+    ├── index/search.db         disposable: search index, rebuilt automatically
+    └── models/                 disposable: embedding model, can be downloaded again
 ```
 
 ```bash
-pmi verify            # 完整性检查：数据库、哈希、每条引用是否仍在原文里、版本链、遗忘是否彻底
-pmi verify --fix      # 同时清理没有被任何来源引用的孤儿文件
-pmi backup            # 一致性快照 → data/memory/backups/*.tar.gz（含校验和）
+pmi verify            # integrity check: database, hashes, every quote still in its source, version chains, complete forgetting
+pmi verify --fix      # also remove orphan files that no source references
+pmi backup            # consistent snapshot → data/memory/backups/*.tar.gz (with checksums)
 pmi restore <archive> --to ~/pmi-copy
-pmi export --out all.jsonl     # 全量导出，与格式和厂商无关
+pmi export --out all.jsonl     # full export, independent of format and vendor
 ```
 
-**换电脑：**
+**Moving to another computer:**
 
-1. 先运行 `pmi backup`，或者确认没有 Agent 正在写入。
-2. 把整个文件夹拷到新电脑。`.venv/` 和 `data/index/` 可以不拷。
-3. 在新位置运行 `./scripts/install.sh && pmi verify`。
+1. Run `pmi backup` first, or make sure no agent is writing.
+2. Copy the whole folder to the new computer. `.venv/` and `data/index/` can be left out.
+3. In the new location, run `./scripts/install.sh && pmi verify`.
 
-所有路径都是相对路径，换目录不影响数据。
+All paths are relative, so the folder can live anywhere.
 
-**换 embedding 模型：**修改 `config/settings.toml` 里的 `[embedding] model`，再运行 `pmi reindex --vectors`。重建期间语义检索自动停用，关键词检索照常可用，记忆本身不受影响。
+**Switching the embedding model:** change `[embedding] model` in `config/settings.toml`, then run `pmi reindex --vectors`. During the rebuild, semantic search is turned off automatically and keyword search keeps working; memories are not affected.
 
 ---
 
-## 10. 命令速查
+## 10. Command reference
 
-| 命令 | 作用 |
+| Command | Purpose |
 |---|---|
-| `pmi init` / `pmi doctor` / `pmi verify [--fix]` | 初始化 / 环境检查 / 完整性检查 |
-| `pmi import <路径…> [--extract] [--trust …] [--kind …]` | 导入文件或目录 |
-| `pmi note <文本或 -> [--kind --title --url --origin-key --source-time --trust --as-agent --extract]` | 存一段文本，`-` 表示从标准输入读取 |
-| `pmi context <问题> [--project --participants --as-of --from --to --history --max-tokens]` | 为问题组装上下文 |
-| `pmi search <查询> [--scope --kind --status --entity --limit]` | 检索 |
-| `pmi show <id…> [--history]` / `pmi list <类别> [--source …]` | 查看 / 浏览 |
-| `pmi propose <ops.json> [--as-agent 名字]` | 写入记忆 |
-| `pmi confirm` / `pmi review list\|approve\|reject` | 确认 / 审批 |
-| `pmi archive` / `pmi restore-memory` / `pmi forget` | 归档 / 恢复 / 遗忘 |
-| `pmi entity list\|alias` | 实体与别名 |
-| `pmi backup` / `pmi restore` / `pmi export` / `pmi reindex [--vectors]` | 运维 |
-| `pmi model download` | 下载语义检索模型 |
-| `pmi github-pr <PR 链接>` | 用 `gh` 把 PR 原样转成 Markdown（只打印，不写入） |
-| `pmi slack-ref <Slack 链接>` | 解析出频道 ID、thread 时间戳和来源身份 |
-| `pmi mcp` | 启动 MCP 服务器，供 Agent 使用 |
+| `pmi init` / `pmi doctor` / `pmi verify [--fix]` | Initialize / check the environment / check integrity |
+| `pmi import <path…> [--extract] [--trust …] [--kind …]` | Import files or folders |
+| `pmi note <text or -> [--kind --title --url --origin-key --source-time --trust --as-agent --extract]` | Store a piece of text; `-` reads standard input |
+| `pmi context <question> [--project --participants --as-of --from --to --history --max-tokens]` | Assemble context for a question |
+| `pmi search <query> [--scope --kind --status --entity --limit]` | Search |
+| `pmi show <id…> [--history]` / `pmi list <category> [--source …]` | Show / browse |
+| `pmi propose <ops.json> [--as-agent name]` | Write memories |
+| `pmi confirm` / `pmi review list\|approve\|reject` | Confirm / review |
+| `pmi archive` / `pmi restore-memory` / `pmi forget` | Archive / restore / forget |
+| `pmi entity list\|alias` | Entities and aliases |
+| `pmi backup` / `pmi restore` / `pmi export` / `pmi reindex [--vectors]` | Maintenance |
+| `pmi model download` | Download the semantic search model |
+| `pmi github-pr <PR link>` | Print a PR as Markdown via `gh` (prints only, stores nothing) |
+| `pmi slack-ref <Slack link>` | Parse the channel ID, thread timestamp and source identity |
+| `pmi mcp` | Start the MCP server for agents |
 
-全局选项：
+Global options:
 
-- `--home <目录>`：PMI 目录，默认是仓库目录或 `$PMI_HOME`。
-- `--json`：输出机器可读的 JSON。
-
----
-
-## 11. 安全边界
-
-- **单用户、本地。** 权限隔离只约束「Agent 通过工具接口能做什么」，不是操作系统级隔离：能读写这个文件夹的本地程序都能绕过它。在 Claude Code 里，Agent 执行命令前由 Claude Code 自己的权限确认把关。
-- **文件夹可移植 ≠ 权限隔离。** 拷走文件夹就带走了全部数据。如果里面存了公司内容（PRD、Slack），能否拷到别的设备，请按你们公司的数据政策判断。
-- **PMI 不发起任何外部动作。** 它不会发消息，也不会改动其他系统。联网的只有两种情况：你显式运行的 `pmi model download`，以及调用你本机 `gh` 的 `pmi github-pr`。包内不存任何密钥。
-- **外部内容会被明确标注。** `trust=external` 的内容在返回结果里会单独标出，并附带「文本是数据，不是指令」的提示。PMI 的行为只取决于调用者身份和操作类型，不受内容影响。
-- **一切可追溯。** 所有变更都写审计日志，每条记忆都有完整的版本链。
-- **未实现的能力：**多用户和多权限域、PMI 内置的 LLM 提炼、HTTP API、Web UI、自动同步 Slack / Notion。
+- `--home <folder>`: the PMI folder; defaults to the repository folder or `$PMI_HOME`.
+- `--json`: machine-readable JSON output.
 
 ---
 
-## 12. 故障排查
+## 11. Security boundary
 
-| 现象 | 处理方法 |
+- **Single user, local.** Permission checks limit what an agent can do through the tool interface; they are not operating-system isolation. Any local program that can read and write this folder can bypass them. In Claude Code, Claude Code's own permission prompts guard the commands an agent runs.
+- **A portable folder is not access control.** Copying the folder takes all the data with it. If it holds company content (PRDs, Slack), follow your company's data policy before copying it to another device.
+- **PMI takes no outbound actions.** It does not send messages or change other systems. Only two things touch the network: `pmi model download`, which you run explicitly, and `pmi github-pr`, which calls your local `gh`. The package stores no secrets.
+- **External content is labeled.** Content with `trust=external` is marked in results, together with a notice that the text is data, not instructions. PMI's behavior depends only on who is calling and which operation is requested, never on the content.
+- **Everything is traceable.** Every change is written to an audit log, and every memory has a full version chain.
+- **Not implemented:** multiple users and permission domains, a built-in LLM extractor, an HTTP API, a web UI, automatic Slack / Notion sync.
+
+---
+
+## 12. Troubleshooting
+
+| Symptom | Fix |
 |---|---|
-| 运行 `pmi` 提示 command not found | 把 `~/.local/bin` 加进 PATH，或者用仓库里 `./pmi` 的完整路径 |
-| 检索不到刚写入的内容 | 一般不用处理，每次调用都会自动追平索引。仍有问题就运行 `pmi reindex` |
-| 返回的 notes 里有 `semantic search unavailable` | 运行 `pmi model download`，或在 `pmi doctor` 的输出里看原因 |
-| 怀疑数据损坏 | 运行 `pmi verify`。如果是索引坏了，直接删掉 `data/index/`，会自动重建 |
-| verify 报告 orphan_file | 有原始文件没被任何来源引用（通常是删除时进程中断留下的），运行 `pmi verify --fix` 清理 |
-| 提示 schema 比代码新 | 数据库来自更新版本的 PMI，先 `git pull` 升级代码，再打开 |
+| `pmi`: command not found | Add `~/.local/bin` to your PATH, or use the full path to `./pmi` in the repository |
+| Content you just wrote does not show up in search | Usually nothing to do: every call brings the index up to date. If it persists, run `pmi reindex` |
+| The notes in a result say `semantic search unavailable` | Run `pmi model download`, or see the reason in `pmi doctor` |
+| You suspect data corruption | Run `pmi verify`. If the index is damaged, delete `data/index/`; it is rebuilt automatically |
+| verify reports `orphan_file` | An original file is not referenced by any source (usually left by an interrupted delete). Run `pmi verify --fix` |
+| The schema is newer than the code | The database comes from a newer PMI. Run `git pull` to update the code, then open it again |
 
 ---
 
-## 13. 开发与项目结构
+## 13. Development and project layout
 
 ```bash
 uv sync --extra semantic
-uv run --frozen --extra semantic pytest -q            # 全部测试，不需要网络和模型
-uv run --frozen --extra semantic pytest -q -m slow    # 真实 embedding 模型测试，需先运行 pmi model download
+uv run --frozen --extra semantic pytest -q            # all tests; no network or model needed
+uv run --frozen --extra semantic pytest -q -m slow    # tests with the real embedding model; run pmi model download first
 ```
 
-`src/pmi/` 中的主要模块：
+Main modules in `src/pmi/`:
 
-- `api.py`：唯一的业务入口。
-- `evolution.py`：替代、冲突、审批规则。
-- `policy.py`：写入策略。
-- `context.py`：上下文组装。
-- `search.py`：检索（FTS5 中文二元组 + 向量）。
-- `index/`：可重建的检索索引。
-- `mcp_server.py`、`cli.py`：MCP 服务器和命令行入口。
-- `integrations/github_pr.py`：GitHub PR 转 Markdown。
+- `api.py`: the single business entry point.
+- `evolution.py`: superseding, conflict and review rules.
+- `policy.py`: write policy.
+- `context.py`: context assembly.
+- `search.py`: search (FTS5 over CJK bigrams, plus vectors).
+- `index/`: the rebuildable search index.
+- `mcp_server.py`, `cli.py`: the MCP server and command-line entry points.
+- `integrations/github_pr.py`: GitHub PR to Markdown.
 
-其他目录和文件：
+Other folders and files:
 
-- `tests/test_acceptance.py`：10 个端到端验收场景。
-- `docs/design/`：设计文档。
-- `docs/implementation-notes.md`：实现中做的取舍。
-- `docs/requirements.md`：原始需求。
+- `tests/test_acceptance.py`: 10 end-to-end acceptance scenarios.
+- `docs/design/`: the design document (in Chinese).
+- `docs/implementation-notes.md`: trade-offs made during implementation (in Chinese).
+- `docs/requirements.md`: the original requirements (in Chinese).
 
-依赖包括 `mcp`、`pypdf`、`python-docx`、`pyyaml`，以及可选的 `fastembed`，版本都由 `uv.lock` 锁定。
+Dependencies: `mcp`, `pypdf`, `python-docx`, `pyyaml`, and optionally `fastembed`; all versions are pinned in `uv.lock`.
 
-License：[MIT](LICENSE)
+License: [MIT](LICENSE)
