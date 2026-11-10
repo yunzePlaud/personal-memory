@@ -1,0 +1,23 @@
+# Your memory data: never commit it
+data/
+
+# Local configuration (may contain machine-specific values; never put secrets here either)
+config/settings.toml
+
+# Secrets and credentials (defensive)
+.env
+.env.*
+*.pem
+*.key
+*secret*
+*credential*
+
+# Python / tooling
+.venv/
+__pycache__/
+.pytest_cache/
+*.egg-info/
+.superpowers/
+
+# OS
+.DS_Store

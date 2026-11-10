@@ -1,0 +1,29 @@
+# PMI settings. Copy to config/settings.toml to override defaults.
+# Never put secrets in this file: it travels with the memory package.
+
+[embedding]
+# "fastembed" (local model, optional `semantic` extra) or "none" (keyword search only)
+provider = "fastembed"
+# Multilingual (Chinese + English) local model, ~220MB, downloaded by `pmi model download`
+model = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+[retrieval]
+# Default token budget for memory_get_context
+max_tokens = 4000
+# Minimum cosine similarity for a semantic hit to count as evidence
+vector_min_similarity = 0.35
+
+[capture]
+# Files larger than this are rejected
+max_file_mb = 50
+# Folders an agent (MCP) may ask PMI to read files from. Relative entries are relative to this
+# PMI folder. Hidden files/folders (".ssh", ".env", ...) are always refused for agents.
+import_roots = ["~/Documents", "~/Desktop", "~/Downloads"]
+
+[policy]
+# What happens to an agent-proposed memory without any source quote: "review" | "apply" | "deny"
+inferred_create = "review"
+
+[index]
+chunk_chars = 800
+chunk_overlap = 100

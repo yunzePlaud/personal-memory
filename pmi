@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# PMI launcher: runs PMI from this folder with uv. Works through symlinks (e.g. ~/.local/bin/pmi).
+# PMI_HOME (where data/ lives) defaults to this folder.
+set -euo pipefail
+SOURCE="${BASH_SOURCE[0]}"
+while [ -L "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+HERE="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+export PMI_HOME="${PMI_HOME:-$HERE}"
+EXTRA=(--extra semantic)
+[ "${PMI_NO_SEMANTIC:-0}" = "1" ] && EXTRA=()
+exec uv run --quiet --frozen --project "$HERE" ${EXTRA[@]+"${EXTRA[@]}"} python -m pmi "$@"  # bash 3.2 + set -u: empty-array safe

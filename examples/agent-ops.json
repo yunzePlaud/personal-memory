@@ -1,0 +1,13 @@
+[
+  {
+    "op": "create",
+    "memory": {
+      "kind": "decision",
+      "content": "Project A 的推送通知采用方案 A（接入现有推送平台）",
+      "slot": "project-a/architecture",
+      "entities": [{"name": "Project A", "kind": "project"}],
+      "valid_from": "2026-10-01",
+      "evidence": [{"source_id": "<src_... returned by memory_add_source>", "quote": "采用方案 A（接入现有推送平台）"}]
+    }
+  }
+]
