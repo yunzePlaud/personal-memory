@@ -177,8 +177,10 @@ class Memory:
         return {"items": items, "not_found": missing}
 
     def list(self, what: str = "recent", *, kind: str | None = None, status: str | None = None,
-             entity: str | None = None, source: str | None = None, limit: int = 50) -> dict[str, Any]:
+             entity: str | None = None, source: str | None = None, limit: int = 50,
+             slot: str | None = None, offset: int = 0) -> dict[str, Any]:
         limit = max(1, min(int(limit), 500))
+        offset = max(0, int(offset))
         if what == "entities":
             return {"items": list_entities(self.truth, kind)[:limit]}
         if what == "slots":
@@ -209,10 +211,23 @@ class Memory:
             if status:
                 where.append("m.status = ?")
                 params.append(status)
-            sql += " where " + " and ".join(where) + " order by m.updated_at desc limit ?"
-            rows = self.truth.execute(sql, (*params, limit)).fetchall()
+            if slot:
+                where.append("m.slot = ?")
+                params.append(slot)
+            # ids break ties between rows updated in the same second, so pages never overlap
+            sql += " where " + " and ".join(where) + " order by m.updated_at desc, m.id desc limit ? offset ?"
+            rows = self.truth.execute(sql, (*params, limit, offset)).fetchall()
             return {"items": [_summary(get_memory(self.truth, r[0])) for r in rows]}
         raise ValidationError("what must be one of memories, entities, slots, proposals, recent")
+
+    def counts(self) -> dict[str, Any]:
+        """Memories per visible status, and pending proposals."""
+        by_status = {s: 0 for s in ("active", "superseded", "disputed", "archived")}
+        for status, n in self.truth.execute("select status, count(*) from memories group by status"):
+            if status in by_status:
+                by_status[status] = n
+        pending = self.truth.execute("select count(*) from proposals where status = 'pending'").fetchone()[0]
+        return {"memories": by_status, "pending_proposals": pending}
 
     # ------------------------------------------------------------------ write (agents too)
 
