@@ -241,4 +241,14 @@ def doctor(paths: Paths, settings: Settings) -> dict[str, Any]:
         "model_files": any(paths.models.rglob("*.onnx")) if paths.models.exists() else False,
     }
     ok = fts5 and checks["data_writable"] and (journal in (None, "wal"))
+    checks["ui_config"] = _ui_config_status(paths)  # informational: only `pmi ui` depends on it
     return {"ok": ok, "checks": checks}
+
+
+def _ui_config_status(paths: Paths) -> dict[str, Any]:
+    from .ui.config import load_ui_config
+
+    try:
+        return {"logs": len(load_ui_config(paths))}
+    except ValidationError as exc:
+        return {"error": exc.message}

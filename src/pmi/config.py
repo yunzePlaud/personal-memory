@@ -50,6 +50,8 @@ def load_settings(paths: Paths) -> Settings:
     defaults = Settings()
     updates: dict[str, object] = {}
     for section, table in raw.items():
+        if section == "ui":  # read by `pmi ui` only, so a mistake there cannot break other commands
+            continue
         if not isinstance(table, dict):
             raise ValidationError(f"settings.toml: [{section}] must be a table")
         for key, value in table.items():
