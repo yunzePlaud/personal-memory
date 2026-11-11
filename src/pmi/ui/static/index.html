@@ -8,6 +8,18 @@
 <script src="app.js" defer></script>
 </head>
 <body>
+<header class="top">
+  <span class="brand">PMI</span>
+  <nav id="tabs">
+    <a href="#/overview" data-tab="overview">Overview</a>
+    <a href="#/memories" data-tab="memories">Memories</a>
+    <a href="#/review" data-tab="review">Review<span id="review-count" class="count" hidden></span></a>
+    <a href="#/logs" data-tab="logs">Logs</a>
+    <a href="#/storage" data-tab="storage">Storage</a>
+  </nav>
+</header>
 <main id="view"></main>
+<div id="toasts" aria-live="polite"></div>
+<div id="modal-root"></div>
 </body>
 </html>
