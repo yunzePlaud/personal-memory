@@ -63,6 +63,13 @@ class UiApp:
         raise NotFoundError(f"log not configured: {name!r}")
 
 
+def _full_message(exc: PmiError) -> str:
+    """The message plus the per-item reasons PMI keeps in details (e.g. why an op was refused)."""
+    errors = exc.details.get("errors") if isinstance(exc.details, dict) else None
+    reasons = [e["message"] for e in errors or [] if isinstance(e, dict) and isinstance(e.get("message"), str)]
+    return f"{exc.message}: {'; '.join(reasons)}" if reasons else exc.message
+
+
 class HttpError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -105,7 +112,7 @@ class _Handler(BaseHTTPRequestHandler):
         except HttpError as exc:
             self._error(exc.code, exc.message)
         except PmiError as exc:
-            self._error(exc.code, exc.message, exc.details)
+            self._error(exc.code, _full_message(exc), exc.details)
         except Exception:  # noqa: BLE001 - never leak internals to the page
             traceback.print_exc(file=sys.stderr)
             self._error("internal", "internal error; see the terminal running pmi ui", status=500)
@@ -149,7 +156,7 @@ class _Handler(BaseHTTPRequestHandler):
             return {}
         try:
             body = json.loads(raw)
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):
             raise ValidationError("request body is not valid JSON") from None
         if not isinstance(body, dict):
             raise ValidationError("request body must be a JSON object")

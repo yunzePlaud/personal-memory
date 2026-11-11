@@ -387,12 +387,12 @@ function previewBlock(label, mem, cls) {
 function proposalCard(p, onDone) {
   const base = `/api/proposals/${encodeURIComponent(p.id)}`;
   const approve = actionButton("Approve", "primary", () =>
-    runAction(post(`${base}/approve`), "Approved.").then(onDone).catch(handleBackground));
+    runAction(post(`${base}/approve`), "Approved.").catch(handleBackground).finally(onDone));
   const reject = actionButton("Reject", "", async () => {
     const answer = await modal({ title: "Reject this change", message: "The proposed change will not be applied.",
       reason: "rejected in web UI", confirmLabel: "Reject" });
     if (answer) {
-      runAction(post(`${base}/reject`, { reason: answer.reason }), "Rejected.").then(onDone).catch(handleBackground);
+      runAction(post(`${base}/reject`, { reason: answer.reason }), "Rejected.").catch(handleBackground).finally(onDone);
     }
   });
   const items = (p.preview || []).map((item) => h("div", { class: "op" },
@@ -464,10 +464,11 @@ async function logsPage(view, arg, alive) {
   const read = async (reset) => {
     const q = reset ? "" : `?since=${offset}`;
     const r = await api(`/api/logs/${enc(spec.name)}/${enc(file)}${q}`);
-    if (!alive()) return;
+    if (!alive() || r.file !== file) return;
+    offset = r.offset;
+    if (!reset && !r.reset && !r.text) return;  // nothing new: keep the user's text selection
     lines = reset || r.reset ? splitLines(r.text) : lines.concat(splitLines(r.text));
     if (lines.length > MAX_LOG_LINES) lines = lines.slice(-MAX_LOG_LINES);
-    offset = r.offset;
     paint();
   };
   const switchTo = async (name) => {

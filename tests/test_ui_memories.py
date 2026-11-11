@@ -111,3 +111,35 @@ def test_malformed_posts_change_nothing(ui, seeded, kw):
     s, body, _ = ui.call("POST", f"/api/memories/{seeded.plain}/forget", **kw)
     assert s == 400 and body["error"]["code"] == "validation"
     assert ui.call("GET", f"/api/memories/{seeded.plain}")[0] == 200
+
+
+def test_failed_approval_is_an_error(ui, seeded):
+    ui.call("POST", f"/api/memories/{seeded.disputed}/archive", {})  # the proposal can no longer apply
+    s, body, _ = ui.call("POST", f"/api/proposals/{seeded.proposal}/approve", {})
+    assert s == 409 and body["error"]["code"] == "conflict" and "archived" in body["error"]["message"]
+    assert ui.call("GET", "/api/proposals")[1]["items"] == []
+
+
+def test_refused_restore_shows_the_reason(ui, seeded, home):
+    with Memory.open(home, embedder=None) as m:
+        src = m.add_source(text="项目 B 的发布窗口是周四")["source_id"]
+        make = lambda: m.propose([{"op": "create", "memory": {"kind": "semantic", "slot": "b/window",
+            "content": "项目 B 的发布窗口是周四", "evidence": [{"source_id": src, "quote": "发布窗口是周四"}]}}])
+        first = make()["results"][0]["memory_id"]
+        m.propose([{"op": "archive", "id": first}])
+        m.propose([{"op": "create", "memory": {"kind": "semantic", "slot": "b/window", "content": "项目 B 改为周五发布",
+                                               "evidence": [{"source_id": src, "quote": "发布窗口是周四"}]}}])
+    s, body, _ = ui.call("POST", f"/api/memories/{first}/restore", {})
+    assert s == 400 and "held by" in body["error"]["message"]
+
+
+def test_search_with_status_all_includes_archived(ui, seeded):
+    ui.call("POST", f"/api/memories/{seeded.plain}/archive", {})
+    q = urllib.parse.quote(seeded.plain_text)
+    assert seeded.plain in [m["id"] for m in ui.call("GET", f"/api/memories?q={q}&status=all")[1]["items"]]
+    assert seeded.plain not in [m["id"] for m in ui.call("GET", f"/api/memories?q={q}")[1]["items"]]
+
+
+def test_deeply_nested_body_is_400(ui, seeded):
+    s, body, _ = ui.call("POST", f"/api/memories/{seeded.plain}/forget", raw=b"[" * 50000)
+    assert s == 400 and body["error"]["code"] == "validation"

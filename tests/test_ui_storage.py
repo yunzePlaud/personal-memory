@@ -32,3 +32,12 @@ def test_missing_parts_count_as_zero(tmp_path):
 
     u = storage_usage(Paths(tmp_path / "empty-home"))
     assert u["total_bytes"] == 0 and all(i["bytes"] == 0 for i in u["items"])
+
+
+def test_hub_cache_symlinks_count_once(paths):
+    blob = paths.models / "models--x" / "blobs" / "abc"
+    put(blob, 1000)
+    snap = paths.models / "models--x" / "snapshots" / "rev" / "model.onnx"
+    snap.parent.mkdir(parents=True)
+    snap.symlink_to(Path("../../blobs/abc"))
+    assert {i["key"]: i["bytes"] for i in storage_usage(paths)["items"]}["models"] == 1000

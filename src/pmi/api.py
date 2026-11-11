@@ -34,6 +34,12 @@ def _summary(m: dict[str, Any], **extra: Any) -> dict[str, Any]:
             "valid_from": m["valid_from"], "valid_until": m["valid_until"], **extra}
 
 
+def _search_statuses(status: str | None) -> tuple[str, ...]:
+    if status == "all":
+        return ("active", "superseded", "disputed", "archived")
+    return (status,) if status else ("active", "disputed")
+
+
 class Memory:
     def __init__(self, paths: Paths, settings: Settings, actor: Actor, embedder: Embedder | None):
         self.paths = paths
@@ -138,7 +144,7 @@ class Memory:
         out: dict[str, Any] = {"memories": [], "sources": [], "notes": notes}
         if scope in ("all", "memories"):
             hits = search_memories(idx, self.truth, query, kinds=[kind] if kind else None,
-                                   statuses=(status,) if status else ("active", "disputed"),
+                                   statuses=_search_statuses(status),
                                    entity_ids=self._entity_ids(entity), time_range=time_range, limit=limit,
                                    embedder=self.embedder, min_similarity=self.settings.vector_min_similarity)
             out["memories"] = [_summary(get_memory(self.truth, h["memory_id"]), score=round(h["score"], 6),

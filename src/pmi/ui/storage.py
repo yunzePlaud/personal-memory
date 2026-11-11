@@ -16,11 +16,20 @@ def _file_size(p: Path) -> int:
 
 
 def _dir_size(p: Path) -> int:
+    """Each file counted once: model caches link snapshots/<rev>/model.onnx to blobs/<sha>."""
     if not p.is_dir():
         return 0
+    seen: set[tuple[int, int]] = set()
     total = 0
     for root, _dirs, files in os.walk(p.resolve()):
-        total += sum(_file_size(Path(root) / name) for name in files)
+        for name in files:
+            try:
+                st = (Path(root) / name).stat()
+            except OSError:
+                continue
+            if (st.st_dev, st.st_ino) not in seen:
+                seen.add((st.st_dev, st.st_ino))
+                total += st.st_size
     return total
 
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any, Callable
 
-from ..errors import NotFoundError, ValidationError
+from ..errors import ConflictError, NotFoundError, ValidationError
 from ..review import list_proposals
 from .logs import log_files, log_status, read_since, read_tail, resolve_log_file
 from .storage import storage_usage
@@ -137,8 +137,8 @@ def list_memories(app: Any, params: dict[str, str], query: dict[str, str], body:
     kind = query.get("kind") or None
     q = (query.get("q") or "").strip()
     with app.memory() as m:
-        if q:
-            items = m.search(q, scope="memories", kind=kind, status=status_filter, limit=limit)["memories"]
+        if q:  # search understands "all" (every visible status); its own default is active + disputed
+            items = m.search(q, scope="memories", kind=kind, status=status, limit=limit)["memories"]
         else:
             items = m.list("memories", kind=kind, status=status_filter, slot=query.get("slot") or None,
                            limit=limit, offset=offset)["items"]
@@ -209,7 +209,12 @@ def get_proposals(app: Any, params: dict[str, str], query: dict[str, str], body:
 def approve_proposal(app: Any, params: dict[str, str], query: dict[str, str], body: dict[str, Any]) -> Any:
     proposal_id = _prp_id(params)
     with app.memory() as m:
-        return m.approve(proposal_id)
+        result = m.approve(proposal_id)
+    if result.get("status") == "failed":  # it left the queue, but nothing was applied
+        failure = result.get("result") or {}
+        raise ConflictError(f"not applied: {failure.get('message') or 'the change could not be applied'}",
+                            failure.get("details") or {})
+    return result
 
 
 @route("POST", r"/api/proposals/(?P<id>[^/]+)/reject")
