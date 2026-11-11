@@ -6,11 +6,12 @@ Together these keep other web pages in the browser from reading or changing memo
 """
 from __future__ import annotations
 
+import errno
 import hmac
 import json
 import sys
 import traceback
-import webbrowser  # noqa: F401  (used by serve)
+import webbrowser
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
@@ -21,7 +22,8 @@ from ..api import Memory
 from ..errors import NotFoundError, PmiError, ValidationError
 from ..paths import Paths
 from . import handlers
-from .config import LogSpec
+from .config import LogSpec, load_ui_config
+from .token import load_or_create_token
 
 UI_ACTOR = Actor.owner("ui")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -194,3 +196,30 @@ class _Server(ThreadingHTTPServer):
 
 def make_server(app: UiApp, *, port: int, host: str = "127.0.0.1") -> ThreadingHTTPServer:
     return _Server(app, (host, port))
+
+
+def serve(home: Path | str, *, port: int = 8765, open_browser: bool = True, new_token: bool = False) -> None:
+    """Run the web UI in the foreground until Ctrl-C."""
+    paths = Paths(Path(home))
+    logs = load_ui_config(paths)  # a bad [ui] section stops here, before anything is bound
+    token = load_or_create_token(paths, renew=new_token)
+    with Memory.open(home, embedder="auto") as m:  # load the embedding model once, not per request
+        embedder = m.embedder
+    app = UiApp(home, token=token, logs=logs, embedder=embedder)
+    try:
+        server = make_server(app, port=port)
+    except OSError as exc:
+        if exc.errno == errno.EADDRINUSE:
+            raise ValidationError(f"port {port} is already in use; pass --port <other>") from None
+        raise
+    url = f"http://127.0.0.1:{server.server_address[1]}/#token={token}"
+    print(f"PMI web UI: {url}")
+    print("Press Ctrl-C to stop.", flush=True)
+    try:
+        if open_browser:
+            webbrowser.open(url)
+        server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        server.server_close()

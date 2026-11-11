@@ -125,6 +125,10 @@ def _parser() -> argparse.ArgumentParser:
     msub = p.add_subparsers(dest="model_cmd", required=True)
     msub.add_parser("download", parents=[common])
     add("mcp", "run the MCP stdio server (agent tools)")
+    p = add("ui", "open the local web UI (Ctrl-C to stop)")
+    p.add_argument("--port", type=int, default=8765, help="port on 127.0.0.1 (default 8765)")
+    p.add_argument("--no-open", action="store_true", help="print the link instead of opening a browser")
+    p.add_argument("--new-token", action="store_true", help="replace the access token; old links stop working")
     p = add("github-pr", "print a GitHub PR as Markdown via your gh login (stores nothing)")
     p.add_argument("url")
     p = add("slack-ref", "parse a Slack message link: channel id, thread ts, origin key")
@@ -291,6 +295,10 @@ def main(argv: list[str] | None = None) -> int:
             from .integrations.github_pr import pr_markdown
             out = pr_markdown(args.url)
             print(json.dumps(out, ensure_ascii=False, indent=2) if as_json else out["markdown"], end="" if not as_json else "\n")
+            return 0
+        if args.command == "ui":
+            from .ui.server import serve
+            serve(home, port=args.port, open_browser=not args.no_open, new_token=args.new_token)
             return 0
         if args.command == "mcp":
             from .mcp_server import run_stdio
