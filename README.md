@@ -21,12 +21,13 @@ PMI handles Chinese and English text, including questions asked in one language 
 5. [Updating knowledge](#5-updating-knowledge)
 6. [Deleting knowledge](#6-deleting-knowledge)
 7. [Querying knowledge](#7-querying-knowledge)
-8. [Write policy and trust](#8-write-policy-and-trust)
-9. [Data, backup and migration](#9-data-backup-and-migration)
-10. [Command reference](#10-command-reference)
-11. [Security boundary](#11-security-boundary)
-12. [Troubleshooting](#12-troubleshooting)
-13. [Development and project layout](#13-development-and-project-layout)
+8. [Web UI](#8-web-ui)
+9. [Write policy and trust](#9-write-policy-and-trust)
+10. [Data, backup and migration](#10-data-backup-and-migration)
+11. [Command reference](#11-command-reference)
+12. [Security boundary](#12-security-boundary)
+13. [Troubleshooting](#13-troubleshooting)
+14. [Development and project layout](#14-development-and-project-layout)
 
 ---
 
@@ -402,7 +403,50 @@ Without the embedding model (`--no-semantic` or `PMI_NO_SEMANTIC=1`) there is no
 
 ---
 
-## 8. Write policy and trust
+## 8. Web UI
+
+```bash
+pmi ui                 # opens http://127.0.0.1:8765 in your browser; Ctrl-C stops it
+pmi ui --port 9000     # use another port
+pmi ui --no-open       # print the link instead of opening a browser
+pmi ui --new-token     # replace the access token; links opened before stop working
+```
+
+Like every other `pmi` command, it runs only while you use it; nothing stays in the background.
+
+| Tab | What you can do |
+|---|---|
+| Overview | Counts of memories and pending reviews, disk usage, the status of each watched log, the latest memories and log lines |
+| Memories | Search (Chinese or English) and filter by status, kind and slot. Open a memory to see its full content, quotes with links to the original, entities and history, then **Confirm**, **Archive**, **Restore** or **Delete permanently** |
+| Review | Changes agents proposed that need your decision, with the new content next to what it would replace: **Approve** or **Reject** |
+| Logs | Follow the log files of your own agents live |
+| Storage | How much space the database, sources, index, model and backups take |
+
+### Watching agent logs
+
+Add one `[[ui.logs]]` entry per log to `config/settings.toml`:
+
+```toml
+[[ui.logs]]
+name = "slack-dm-responder"                          # shown in the page
+path = "~/.slack-dm-responder/logs/session-*.log"    # ~ and wildcards work; the newest file name comes first
+stale_minutes = 10                                   # optional: no new output for this long turns the status yellow
+hide_pattern = "扫描 0 条"                            # optional: lines containing this text can be hidden ("Hide idle lines")
+```
+
+The page shows the newest file and keeps following it, also when a new file starts (for example a new day). The status is **Active** when the file changed within `stale_minutes`, **No output for N min** when it did not, and **No log file** when nothing matches. PMI only reads these files. A mistake in the `[ui]` section stops only `pmi ui`: `pmi doctor` reports it, and every other command, including `pmi mcp`, keeps working.
+
+### Security
+
+- It listens on `127.0.0.1` only, so other machines cannot reach it.
+- Every data request needs the access token from the link `pmi ui` prints. The token lives in `data/ui-token` (readable only by you) and is reused across restarts, so bookmarks keep working. It is not included in `pmi backup` or `pmi export`. `pmi ui --new-token` replaces it.
+- Requests from other websites open in your browser are refused: the Host header is checked, no cross-origin access is allowed, and writes accept JSON only.
+- Actions in the page act as you, exactly like the command line, and the audit log records them as `owner:ui`. Agents still cannot confirm, delete or approve through MCP.
+- The page shows memory content and log lines, which may include other people's messages, on your machine only.
+
+---
+
+## 9. Write policy and trust
 
 | Who | What they can do |
 |---|---|
@@ -421,7 +465,7 @@ Whether a change takes effect automatically depends on the **lowest** trust leve
 
 ---
 
-## 9. Data, backup and migration
+## 10. Data, backup and migration
 
 ```
 personal-memory/
@@ -458,7 +502,7 @@ All paths are relative, so the folder can live anywhere.
 
 ---
 
-## 10. Command reference
+## 11. Command reference
 
 | Command | Purpose |
 |---|---|
@@ -477,6 +521,7 @@ All paths are relative, so the folder can live anywhere.
 | `pmi github-pr <PR link>` | Print a PR as Markdown via `gh` (prints only, stores nothing) |
 | `pmi slack-ref <Slack link>` | Parse the channel ID, thread timestamp and source identity |
 | `pmi mcp` | Start the MCP server for agents |
+| `pmi ui [--port N] [--no-open] [--new-token]` | Open the local web UI (section 8) |
 
 Global options:
 
@@ -485,18 +530,19 @@ Global options:
 
 ---
 
-## 11. Security boundary
+## 12. Security boundary
 
 - **Single user, local.** Permission checks limit what an agent can do through the tool interface; they are not operating-system isolation. Any local program that can read and write this folder can bypass them. In Claude Code, Claude Code's own permission prompts guard the commands an agent runs.
 - **A portable folder is not access control.** Copying the folder takes all the data with it. If it holds company content (PRDs, Slack), follow your company's data policy before copying it to another device.
 - **PMI takes no outbound actions.** It does not send messages or change other systems. Only two things touch the network: `pmi model download`, which you run explicitly, and `pmi github-pr`, which calls your local `gh`. The package stores no secrets.
 - **External content is labeled.** Content with `trust=external` is marked in results, together with a notice that the text is data, not instructions. PMI's behavior depends only on who is calling and which operation is requested, never on the content.
 - **Everything is traceable.** Every change is written to an audit log, and every memory has a full version chain.
-- **Not implemented:** multiple users and permission domains, a built-in LLM extractor, an HTTP API, a web UI, automatic Slack / Notion sync.
+- **The web UI is local.** `pmi ui` listens on 127.0.0.1 only and every data request needs its access token; see section 8.
+- **Not implemented:** multiple users and permission domains, a built-in LLM extractor, a public HTTP API (the web UI's endpoints serve only its own page), automatic Slack / Notion sync.
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Symptom | Fix |
 |---|---|
@@ -506,11 +552,12 @@ Global options:
 | A question in one language misses content written in the other | Check that `pmi doctor` shows the embedding model as available. A memory whose `content` is in one language only is matched across languages by meaning alone: add the other language with an `update` op (see [section 5](#5-updating-knowledge)). Importing an unchanged source again does not re-distill it |
 | You suspect data corruption | Run `pmi verify`. If the index is damaged, delete `data/index/`; it is rebuilt automatically |
 | verify reports `orphan_file` | An original file is not referenced by any source (usually left by an interrupted delete). Run `pmi verify --fix` |
+| `pmi ui` says the port is already in use | Another program (or another `pmi ui`) is using it: pass `--port <other>` |
 | The schema is newer than the code | The database comes from a newer PMI. Run `git pull` to update the code, then open it again |
 
 ---
 
-## 13. Development and project layout
+## 14. Development and project layout
 
 ```bash
 uv sync --extra semantic
@@ -527,6 +574,7 @@ Main modules in `src/pmi/`:
 - `search.py`: search (FTS5 over CJK bigrams, plus vectors).
 - `index/`: the rebuildable search index.
 - `mcp_server.py`, `cli.py`: the MCP server and command-line entry points.
+- `ui/`: the local web UI (`server.py` HTTP and security checks, `handlers.py` endpoints, `static/` the page).
 - `integrations/github_pr.py`: GitHub PR to Markdown.
 
 Other folders and files:

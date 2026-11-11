@@ -27,3 +27,11 @@ inferred_create = "review"
 [index]
 chunk_chars = 800
 chunk_overlap = 100
+
+# Logs the web UI (`pmi ui`) shows on its Logs tab; one [[ui.logs]] block per log.
+# Only `pmi ui` reads this section, so a mistake here never breaks other commands.
+# [[ui.logs]]
+# name = "slack-dm-responder"                          # shown in the page; unique
+# path = "~/.slack-dm-responder/logs/session-*.log"    # ~ and * ? wildcards; the newest file name is shown first
+# stale_minutes = 10                                   # no new output for this long turns the status yellow
+# hide_pattern = "扫描 0 条"                            # lines containing this text can be hidden ("Hide idle lines")
