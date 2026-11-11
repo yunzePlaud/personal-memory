@@ -8,7 +8,7 @@
 - **No services**: no database server, no Docker, no background process. One SQLite file plus a folder of originals is all the data; copy the folder to move it.
 - **Model-agnostic**: PMI never calls an LLM itself. The agent you are already using does the reading and understanding. An optional local multilingual embedding model is used only for semantic search.
 
-PMI handles Chinese and English text. The bundled sample data and the three Claude Code skills are written in Chinese.
+PMI handles Chinese and English text, including questions asked in one language about content written in the other (see [Questions in Chinese and English](#questions-in-chinese-and-english)). The bundled sample data and the instructions in the three Claude Code skills are in Chinese; the memories the skills write are in both languages.
 
 ---
 
@@ -268,6 +268,8 @@ In Claude Code, say: "Store this PRD in PMI and distill the knowledge." The agen
 
 PMI checks every quote and handles deduplication, superseding and conflicts automatically.
 
+If you ask questions in both Chinese and English, ask the agent to write each memory's `content` in both languages: Chinese first, then English on a line starting with `EN:`. Quotes stay verbatim in the source's language. The Notion / Linear / Slack skills do this by default; see [Questions in Chinese and English](#questions-in-chinese-and-english).
+
 ### 4.4 Import from Notion / Linear / Slack (Claude Code skills)
 
 | You say | What happens |
@@ -281,6 +283,7 @@ You can also just say "import this ticket into PMI". All three skills follow the
 - **They run only when you explicitly ask for an import.** A link that is part of another task ("implement this PRD", "help me reply to this thread") is not stored in PMI.
 - **They always ask before writing.** One confirmation covers both storing the text and distilling it. Say "store the text only" to skip distilling.
 - **Everything is stored as an external document.** Memories backed by these sources cannot automatically change memories you confirmed, or memories backed by your own documents.
+- **Memories are bilingual.** Whatever the language of the source, each memory states the knowledge in Chinese and then in English on an `EN:` line, so a question in either language finds it. Quotes stay verbatim in the source's language; the original text is stored once, never translated.
 - **One object, one identity.** All link forms of the same page, ticket, PR or thread map to one source identity, such as `notion:<page id>`, `linear:APP-184`, `github:owner/repo#123` or `slack:<channel>/<thread timestamp>`. Importing it again creates a new version.
 - **No personal identifiers are kept.** Email addresses and user IDs are not stored; images keep only their caption or file name.
 
@@ -388,6 +391,15 @@ Fields in a `context` result:
 - `trust`: the trust level of each quote.
 - `insufficient_evidence: true`: PMI does not have enough evidence to answer. Items found only through entity links or weak semantic similarity are still listed, but do not count as evidence.
 
+### Questions in Chinese and English
+
+Keyword search matches words in the language of the question, so it finds text written in that same language. Two things carry a question across languages:
+
+- **Bilingual memories.** The Notion / Linear / Slack skills write every memory in Chinese and then in English on an `EN:` line, so a question in either language matches it by keyword. Ask other agents to do the same (see 4.3).
+- **The multilingual embedding model.** It finds text in the other language by meaning, for example source passages that no memory covers yet. A match found only this way counts as evidence when its similarity is at least 0.65, which cross-language matches often miss; such matches are still listed, with `insufficient_evidence: true`.
+
+Without the embedding model (`--no-semantic` or `PMI_NO_SEMANTIC=1`) there is no cross-language search. When a project or person has a different name in each language, add an alias so entity search finds both: `pmi entity alias <entity id> Android` (ids come from `pmi entity list`).
+
 ---
 
 ## 8. Write policy and trust
@@ -491,6 +503,7 @@ Global options:
 | `pmi`: command not found | Add `~/.local/bin` to your PATH, or use the full path to `./pmi` in the repository |
 | Content you just wrote does not show up in search | Usually nothing to do: every call brings the index up to date. If it persists, run `pmi reindex` |
 | The notes in a result say `semantic search unavailable` | Run `pmi model download`, or see the reason in `pmi doctor` |
+| A question in one language misses content written in the other | Check that `pmi doctor` shows the embedding model as available. A memory whose `content` is in one language only is matched across languages by meaning alone: add the other language with an `update` op (see [section 5](#5-updating-knowledge)). Importing an unchanged source again does not re-distill it |
 | You suspect data corruption | Run `pmi verify`. If the index is damaged, delete `data/index/`; it is rebuilt automatically |
 | verify reports `orphan_file` | An original file is not referenced by any source (usually left by an interrupted delete). Run `pmi verify --fix` |
 | The schema is newer than the code | The database comes from a newer PMI. Run `git pull` to update the code, then open it again |

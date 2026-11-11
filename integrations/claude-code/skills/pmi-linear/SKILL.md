@@ -1,6 +1,6 @@
 ---
 name: pmi-linear
-description: 把 Linear ticket（描述、评论、状态历史）连同它关联的 GitHub PR（描述、人工 review 讨论、改动文件列表）导入个人记忆库 PMI，存入前先向用户确认，确认后自动提炼带原文引用的知识（外部文档，trust=external）。只在用户明确要求把某个 Linear 链接 / ticket 导入 PMI / 存进记忆库时触发（「把这个 ticket 导入 PMI」「存进记忆库」「提炼这个 Linear 的知识」或 /pmi-linear <链接或 ID>）。ticket 夹在别的任务里（如「修一下 APP-184」）时不触发。
+description: 把 Linear ticket（描述、评论、状态历史）连同它关联的 GitHub PR（描述、人工 review 讨论、改动文件列表）导入个人记忆库 PMI，存入前先向用户确认，确认后自动提炼带原文引用的中英双语知识（外部文档，trust=external）。只在用户明确要求把某个 Linear 链接 / ticket 导入 PMI / 存进记忆库时触发（「把这个 ticket 导入 PMI」「存进记忆库」「提炼这个 Linear 的知识」或 /pmi-linear <链接或 ID>）。ticket 夹在别的任务里（如「修一下 APP-184」）时不触发。
 ---
 
 # 导入 Linear ticket（+ 关联 PR）到 PMI
@@ -96,8 +96,8 @@ PMI --json note - --kind document --title "<PR title>" --url "<PR 链接>" \
    - 谁负责什么（person）。
    不要提炼：构建 / 安装包链接、cc、纯状态流转、代码行号等仓库里已有的细节。
 3. 每条记忆：
-   - `content` 用中文完整陈述，并带上 ticket 编号（如「（APP-184）」）便于检索；
-   - `evidence`：从**已保存的** ticket / PR 原文逐字复制的 quote（≥4 字，可多条、可同时引用 ticket 和 PR 的 source_id）；
+   - `content`：**中英双语**，固定两段——先写中文完整陈述，换行后以 `EN: ` 开头写同一内容的英文陈述。不论原文是中文还是英文都写两段，这样用中文或英文提问都能按关键词直接命中，不必只靠语义模型。两段说的是同一件事，任何一段都不增减信息；产品名、人名、编号、代码标识符、数字、日期原样保留；有通行叫法就用通行叫法（如 安卓 ↔ Android、退款 ↔ refund），不生造译名。两段都带上 ticket 编号（如「（APP-184）」/「(APP-184)」）便于检索；
+   - `evidence`：从**已保存的** ticket / PR 原文逐字复制的 quote（≥4 字，可多条、可同时引用 ticket 和 PR 的 source_id）；quote 保持原文的语言，**不要**引用自己写的译文；
    - `entities`：功能 / 项目（project，role=subject，例如 Linear 的 project 或功能名），相关的人（person，role=owner / participant），平台（system，如 iOS / Android，role=mentioned）；
    - `valid_from`：确立这条知识的评论时间 / PR 合并时间（日期即可）；
    - 不要设置 `verification`。

@@ -1,6 +1,6 @@
 ---
 name: pmi-slack
-description: 把一整个 Slack thread（主消息 + 全部回复）导入个人记忆库 PMI，存入前先向用户确认（含频道是否私有），确认后自动提炼知识：区分已拍板的决策、未决讨论、行动项（外部文档，trust=external）。只在用户明确要求把某个 Slack 链接 / thread 导入 PMI / 存进记忆库时触发（「把这个 thread 导入 PMI」「存进记忆库」「提炼这个 Slack 讨论」或 /pmi-slack <链接>）。Slack 链接夹在别的任务里（如「看下这个 thread 帮我回复」）时不触发。
+description: 把一整个 Slack thread（主消息 + 全部回复）导入个人记忆库 PMI，存入前先向用户确认（含频道是否私有），确认后自动提炼中英双语知识：区分已拍板的决策、未决讨论、行动项（外部文档，trust=external）。只在用户明确要求把某个 Slack 链接 / thread 导入 PMI / 存进记忆库时触发（「把这个 thread 导入 PMI」「存进记忆库」「提炼这个 Slack 讨论」或 /pmi-slack <链接>）。Slack 链接夹在别的任务里（如「看下这个 thread 帮我回复」）时不触发。
 ---
 
 # 导入 Slack thread 到 PMI
@@ -78,14 +78,14 @@ PMI --json note - --kind conversation --title "Slack #<频道名>：<主消息�
 2. **按讨论的最终状态提炼**：thread 里前面的说法被后面更正、推翻或收敛的，以最后的结论为准（必要时在 content 里写「早先提议过 X，最终改为 Y」）。
 3. 分类：
    - **已拍板的决策**（kind=decision）：有明确的「结论 / 就这么做 / 确认 / 同意」，写清楚谁拍板、何时；
-   - **未决讨论**（kind=episodic，tags 加 `open-question`）：提出了但 thread 里没有结论的问题，content 开头写「（未定）」，并写出各方立场；以后有了结论，用同一个 slot 的决策替代它；
+   - **未决讨论**（kind=episodic，tags 加 `open-question`）：提出了但 thread 里没有结论的问题，content 的中文段开头写「（未定）」、EN 段开头写 `(Open)`，并写出各方立场；以后有了结论，用同一个 slot 的决策替代它；
    - **行动项**（kind=episodic，tags 加 `action-item`）：谁要做什么；
    - **事实 / 口径 / 接口约定**（kind=semantic）：例如字段含义、错误码约定、边界条件；
    - **人员**（kind=person）：谁负责哪一块（后端 / App / 产品 / QA）。
    一般 3–12 条；跳过寒暄、cc、「收到」「ok」这类消息。
 4. 每条记忆：
-   - `content` 用中文完整陈述；提到 ticket 编号（如 APP-1064）就写上，便于检索；
-   - `evidence`：从**已保存的 thread 原文**逐字复制的 quote（≥4 字，可多条）；
+   - `content`：**中英双语**，固定两段——先写中文完整陈述，换行后以 `EN: ` 开头写同一内容的英文陈述。不论原文是中文还是英文都写两段，这样用中文或英文提问都能按关键词直接命中，不必只靠语义模型。两段说的是同一件事，任何一段都不增减信息；产品名、人名、编号、代码标识符、数字、日期原样保留；有通行叫法就用通行叫法（如 安卓 ↔ Android、退款 ↔ refund），不生造译名。提到 ticket 编号（如 APP-1064）两段都写上，便于检索；
+   - `evidence`：从**已保存的 thread 原文**逐字复制的 quote（≥4 字，可多条）；quote 保持原文的语言，**不要**引用自己写的译文；
    - `entities`：功能 / 项目（role=subject）、人（person，role=owner / participant）、系统 / 服务（system，role=mentioned）；
    - `valid_from`：确立这条结论的那条消息的日期；
    - 不要设置 `verification`。

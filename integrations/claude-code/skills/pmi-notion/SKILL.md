@@ -1,6 +1,6 @@
 ---
 name: pmi-notion
-description: 把 Notion 页面导入个人记忆库 PMI并自动提炼成带原文引用的记忆（外部文档，trust=external），存入前先向用户确认。只在用户明确要求把某个 Notion 链接导入 PMI / 存进记忆库时触发（「导入 PMI」「存进记忆库」「记住这个 Notion 页面」「把这个 PRD 导进记忆库」或 /pmi-notion <链接>）。链接夹在别的任务里（如「照这个 PRD 实现功能」）或只贴了链接没说要导入时，不触发。
+description: 把 Notion 页面导入个人记忆库 PMI并自动提炼成带原文引用的中英双语记忆（外部文档，trust=external），存入前先向用户确认。只在用户明确要求把某个 Notion 链接导入 PMI / 存进记忆库时触发（「导入 PMI」「存进记忆库」「记住这个 Notion 页面」「把这个 PRD 导进记忆库」或 /pmi-notion <链接>）。链接夹在别的任务里（如「照这个 PRD 实现功能」）或只贴了链接没说要导入时，不触发。
 ---
 
 # 导入 Notion 页面到 PMI（自动提炼记忆）
@@ -67,8 +67,9 @@ PMI --json note - --kind document --title "<标题>" --url "<链接>" \
 1. 先看已有 slot：`PMI --json list slots`。同一主题沿用已有 slot，新主题用 `<项目-slug>/<主题>`（例如 `billing/upgrade-refund`）。页面更新（`new_version`）时，**沿用这一页上次用过的 slot**，这样新结论会自动替代旧结论、没变的结论只追加引用。
 2. 只挑**长期有价值**的内容，一般 3–10 条：决策 / 规则（连同理由）、项目目标 / 状态、负责人（kind=person）、流程 / SOP（kind=procedure）、关键事实（kind=semantic）。大张的 ID / 价格表留在原文里供检索，不要逐行拆成记忆；可以提炼一条「X 以这份文档为准」之类的指引。
 3. 每条记忆：
-   - `title`：一句话；`content`：自己概括的完整陈述（中文）；
-   - `evidence: [{"source_id": <第 2 步的 source_id>, "quote": "<从保存的原文逐字复制，≥4 个字，可多条>"}]`——包括原文里的 `<b>`、`<code>` 等标记都要一字不差，PMI 会核对，对不上会整批拒绝；
+   - `title`：一句话（中文）；
+   - `content`：**中英双语**，固定两段——先写中文完整陈述，换行后以 `EN: ` 开头写同一内容的英文陈述。不论原文是中文还是英文都写两段，这样用中文或英文提问都能按关键词直接命中，不必只靠语义模型。两段说的是同一件事，任何一段都不增减信息；产品名、人名、编号、代码标识符、数字、日期原样保留；有通行叫法就用通行叫法（如 安卓 ↔ Android、退款 ↔ refund），不生造译名。例：`"年费会员中途升级时，按剩余天数折算并退还差价。\nEN: When an annual member upgrades mid-term, the difference for the remaining days is prorated and refunded."`；
+   - `evidence: [{"source_id": <第 2 步的 source_id>, "quote": "<从保存的原文逐字复制，≥4 个字，可多条>"}]`——包括原文里的 `<b>`、`<code>` 等标记都要一字不差，PMI 会核对，对不上会整批拒绝；quote 保持原文的语言，**不要**引用自己写的译文；
    - `entities`：项目（role=subject），相关的人（role=owner / participant），平台 / 系统（kind=system，role=mentioned）；
    - `valid_from`：页面写明了生效日期就用它，否则省略（默认取页面最后编辑时间）；
    - **不要**设置 `verification`。
